@@ -115,7 +115,9 @@
             android:paddingStart="15dp"
             android:paddingEnd="15dp"
             android:minHeight="50dp"
-            android:layout_gravity="center_horizontal"/>
+            android:layout_gravity="center_horizontal"
+            android:textColor="@color/schoolNameColor"
+            android:textColorHint="@color/hintColor"/>
 
         <FrameLayout
             android:layout_width="match_parent"
@@ -131,7 +133,9 @@
                 android:background="@drawable/input_style"
                 android:paddingStart="15dp"
                 android:paddingEnd="45dp"
-            android:minHeight="50dp" />
+                android:minHeight="50dp"
+                android:textColor="@color/schoolNameColor"
+                android:textColorHint="@color/hintColor"/>
 
             <ImageView
                 android:id="@+id/passwordToggle"

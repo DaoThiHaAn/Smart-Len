@@ -1,6 +1,7 @@
 package com.example.detectionapp;
 
 import android.Manifest;
+import android.animation.ObjectAnimator;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
@@ -8,6 +9,7 @@ import android.os.Bundle;
 import android.text.method.LinkMovementMethod;
 import android.util.Log;
 import android.view.LayoutInflater;
+import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ProgressBar;
@@ -19,10 +21,12 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.camera.core.Camera;
+import androidx.camera.core.CameraControl;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.Preview;
 import androidx.camera.lifecycle.ProcessCameraProvider;
+import androidx.camera.view.PreviewView;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 
@@ -38,9 +42,11 @@ import java.util.concurrent.Executors;
 @androidx.camera.core.ExperimentalGetImage
 public class QRScannerFragment extends Fragment {
 
+    private ObjectAnimator scanAnimator;
     private static final String TAG = "QRScanner";
     private ExecutorService cameraExecutor;
     private TextView qrCodeResult;
+    private CameraControl cameraControl;
 
     private final ActivityResultLauncher<String> requestPermissionLauncher =
             registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
@@ -75,6 +81,15 @@ public class QRScannerFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
 
         ProgressBar progressBar = view.findViewById(R.id.progressBar);
+        View scanningLine = view.findViewById(R.id.scanningLine);
+
+        // Scanning animation
+        PreviewView previewView = view.findViewById(R.id.previewView);
+        ObjectAnimator animator = ObjectAnimator.ofFloat(scanningLine, "translationY", 0f, previewView.getHeight());
+        animator.setDuration(2000);
+        animator.setRepeatCount(ObjectAnimator.INFINITE);
+        animator.setRepeatMode(ObjectAnimator.REVERSE);
+        animator.start();
 
         // Check and request camera permission
         if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.CAMERA)
@@ -84,6 +99,23 @@ public class QRScannerFragment extends Fragment {
             progressBar.setVisibility(View.VISIBLE); // Show progress bar
             startCamera(view, progressBar); // Pass both View and ProgressBar
         }
+
+        ScaleGestureDetector scaleGestureDetector = new ScaleGestureDetector(requireContext(), new ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            private float currentZoomRatio = 1.0f;
+
+            @Override
+            public boolean onScale(ScaleGestureDetector detector) {
+                currentZoomRatio *= detector.getScaleFactor();
+                currentZoomRatio = Math.max(1.0f, Math.min(currentZoomRatio, 10.0f)); // Clamp zoom ratio
+                cameraControl.setZoomRatio(currentZoomRatio); // Set zoom ratio
+                return true;
+            }
+        });
+
+        previewView.setOnTouchListener((v, event) -> {
+            scaleGestureDetector.onTouchEvent(event);
+            return true;
+        });
     }
 
     private void startCamera(View view, ProgressBar progressBar) {
@@ -119,9 +151,18 @@ public class QRScannerFragment extends Fragment {
                                     for (Barcode barcode : barcodes) {
                                         String rawValue = barcode.getRawValue();
                                         if (rawValue != null) {
-                                            qrCodeResult.setText(rawValue);
+                                            // Stop scanning animation
+                                            View scanningContainer = getView().findViewById(R.id.scanningContainer);
+                                            scanningContainer.setVisibility(View.GONE);
+                                            if (scanAnimator != null && scanAnimator.isRunning()) {
+                                                scanAnimator.cancel();
+                                            }
 
-                                            // Check if the result is a URL
+                                            // Truncate long URLs for display
+                                            String displayText = rawValue.length() > 50 ? rawValue.substring(0, 47) + "..." : rawValue;
+                                            qrCodeResult.setText(displayText);
+
+                                            // Make the TextView clickable if it's a URL
                                             if (rawValue.startsWith("http://") || rawValue.startsWith("https://")) {
                                                 qrCodeResult.setOnClickListener(v -> {
                                                     Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(rawValue));
@@ -142,6 +183,28 @@ public class QRScannerFragment extends Fragment {
                 });
 
                 Camera camera = cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageAnalysis);
+
+                View scanningContainer = view.findViewById(R.id.scanningContainer);
+                View scanningLine = view.findViewById(R.id.scanningLine);
+
+                // Show scanning box after camera starts
+                scanningContainer.setVisibility(View.VISIBLE);
+
+                scanningContainer.post(() -> {
+                    float containerHeight = scanningContainer.getHeight();
+                    scanningLine.setTranslationY(0f); // Reset line
+                
+                    scanAnimator = ObjectAnimator.ofFloat(scanningLine, "translationY", 0f, containerHeight);
+                    scanAnimator.setDuration(2000);
+                    scanAnimator.setRepeatCount(ObjectAnimator.INFINITE);
+                    scanAnimator.setRepeatMode(ObjectAnimator.REVERSE);
+                    scanAnimator.start();
+                });
+
+
+                // Get CameraControl for zoom functionality
+                cameraControl = camera.getCameraControl();
+
                 progressBar.setVisibility(View.GONE); // Hide progress bar
                 Toast.makeText(requireContext(), "Camera started", Toast.LENGTH_SHORT).show();
             } catch (Exception e) {
