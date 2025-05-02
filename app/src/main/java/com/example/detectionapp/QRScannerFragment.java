@@ -10,9 +10,12 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.camera.core.Camera;
@@ -35,9 +38,25 @@ import java.util.concurrent.Executors;
 @androidx.camera.core.ExperimentalGetImage
 public class QRScannerFragment extends Fragment {
 
-    private static final int CAMERA_PERMISSION_REQUEST_CODE = 100;
+    private static final String TAG = "QRScanner";
     private ExecutorService cameraExecutor;
     private TextView qrCodeResult;
+
+    private final ActivityResultLauncher<String> requestPermissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
+                if (isGranted) {
+                    // Permission granted
+                    View view = getView();
+                    if (view != null) {
+                        ProgressBar progressBar = view.findViewById(R.id.progressBar);
+                        progressBar.setVisibility(View.VISIBLE); // Show progress bar
+                        startCamera(view, progressBar); // Pass both View and ProgressBar
+                    }
+                } else {
+                    // Permission denied
+                    Toast.makeText(requireContext(), "Camera permission is required to use this feature", Toast.LENGTH_SHORT).show();
+                }
+            });
 
     @Nullable
     @Override
@@ -48,18 +67,26 @@ public class QRScannerFragment extends Fragment {
         qrCodeResult.setMovementMethod(LinkMovementMethod.getInstance()); // Enable clickable links
         cameraExecutor = Executors.newSingleThreadExecutor();
 
-        // Check and request camera permission
-        if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.CAMERA)
-                != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION_REQUEST_CODE);
-        } else {
-            startCamera(view);
-        }
-
         return view;
     }
 
-    private void startCamera(View view) {
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+
+        ProgressBar progressBar = view.findViewById(R.id.progressBar);
+
+        // Check and request camera permission
+        if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.CAMERA)
+                != PackageManager.PERMISSION_GRANTED) {
+            requestPermissionLauncher.launch(Manifest.permission.CAMERA);
+        } else {
+            progressBar.setVisibility(View.VISIBLE); // Show progress bar
+            startCamera(view, progressBar); // Pass both View and ProgressBar
+        }
+    }
+
+    private void startCamera(View view, ProgressBar progressBar) {
         ListenableFuture<ProcessCameraProvider> cameraProviderFuture =
                 ProcessCameraProvider.getInstance(requireContext());
 
@@ -106,39 +133,27 @@ public class QRScannerFragment extends Fragment {
                                         }
                                     }
                                 })
-                                .addOnFailureListener(e -> Log.e("QRScanner", "Barcode scanning failed", e))
+                                .addOnFailureListener(e -> Log.e(TAG, "Barcode scanning failed", e))
                                 .addOnCompleteListener(task -> image.close());
                     } catch (Exception e) {
                         image.close();
-                        Log.e("QRScanner", "Camera initialization failed: " + e.getMessage(), e);
+                        Log.e(TAG, "Camera initialization failed: " + e.getMessage(), e);
                     }
                 });
 
                 Camera camera = cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageAnalysis);
+                progressBar.setVisibility(View.GONE); // Hide progress bar
                 Toast.makeText(requireContext(), "Camera started", Toast.LENGTH_SHORT).show();
             } catch (Exception e) {
-                Log.e("QRScanner", "Camera initialization failed", e);
+                progressBar.setVisibility(View.GONE); // Hide progress bar on failure
+                Log.e(TAG, "Camera initialization failed", e);
             }
         }, ContextCompat.getMainExecutor(requireContext()));
     }
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == CAMERA_PERMISSION_REQUEST_CODE) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                // Permission granted
-                startCamera(getView());
-            } else {
-                // Permission denied
-                Toast.makeText(requireContext(), "Camera permission is required to use this feature", Toast.LENGTH_SHORT).show();
-            }
-        }
-    }
-
-    @Override
-    public void onDestroy() {
-        super.onDestroy();
+    public void onDestroyView() {
+        super.onDestroyView();
         cameraExecutor.shutdown();
     }
 }
