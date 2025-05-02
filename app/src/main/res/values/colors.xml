@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="textColor">#5D5A88</color>
+    <color name="botBarIconColor">#2f546b</color>
+    <color name="botBarBackground">#caf7fc</color>
+    <color name="schoolNameColor">#030391</color>
+    <color name="primaryBtnColor">#13315C</color>
+    <color name="backgroundColor">#EEF4ED</color>
+    <color name="selectedColor">#d8e2dc</color>
+</resources>
