@@ -31,14 +31,24 @@ public class MainActivity extends AppCompatActivity {
         EditText passwordEditText = findViewById(R.id.editTextPassword);
         ImageView toggleIcon = findViewById(R.id.passwordToggle);
     
+        // Set the initial icon based on the current InputType
+        if (passwordEditText.getInputType() == (InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD)) {
+            toggleIcon.setImageResource(R.drawable.invisible); // Password is hidden
+        } else {
+            toggleIcon.setImageResource(R.drawable.visible); // Password is visible
+        }
+    
         toggleIcon.setOnClickListener(v -> {
             if (passwordEditText.getInputType() == (InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD)) {
+                // Show password
                 passwordEditText.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
                 toggleIcon.setImageResource(R.drawable.visible);
             } else {
+                // Hide password
                 passwordEditText.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
                 toggleIcon.setImageResource(R.drawable.invisible);
             }
+            // Move the cursor to the end of the text
             passwordEditText.setSelection(passwordEditText.getText().length());
         });
     }
