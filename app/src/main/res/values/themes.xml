@@ -6,4 +6,16 @@
     </style>
 
     <style name="Theme.DetectionApp" parent="Base.Theme.DetectionApp" />
+
+    <style name="CustomAddBtnStyle" parent="Widget.Material3.Button">
+        <item name="android:background">@drawable/btn_add_selector</item>
+        <item name="android:textColor">@color/black</item>
+        <item name="android:paddingStart">15dp</item>
+        <item name="android:paddingEnd">15dp</item>
+        <item name="android:paddingTop">5dp</item>
+        <item name="android:paddingBottom">5dp</item>
+        <item name="android:drawableLeft">@drawable/ic_add</item>
+        <item name="backgroundTint">@null</item> <!-- Remove Material3 default tint -->
+
+    </style>
 </resources>

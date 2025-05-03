@@ -11,4 +11,5 @@
     <color name="selectedColor">#d8e2dc</color>
     <color name="hintColor">#8d99ae</color>
     <color name="scanLineColor">#AFC0C055</color>
+    <color name="defaultAddBtnBackground">#DBDBDB</color>
 </resources>

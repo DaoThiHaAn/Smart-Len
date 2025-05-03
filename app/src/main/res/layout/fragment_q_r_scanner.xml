@@ -40,7 +40,6 @@
             android:background="@color/scanLineColor" />
     </FrameLayout>
 
-
     <!-- Progress Bar -->
     <ProgressBar
         android:id="@+id/progressBar"

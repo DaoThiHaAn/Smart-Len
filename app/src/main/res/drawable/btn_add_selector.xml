@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Pressed state -->
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/hintColor" />
+            <stroke
+                android:width="1dp"
+                android:color="#6F759E" />
+            <corners android:radius="0dp" /> <!-- Match the radius of the default shape -->
+        </shape>
+    </item>
+
+    <!-- Default state -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/defaultAddBtnBackground" />
+            <stroke
+                android:width="1dp"
+                android:color="#6F759E" />
+            <corners android:radius="0dp" /> <!-- Match the radius of the default shape -->
+        </shape>
+    </item>
+</selector>
