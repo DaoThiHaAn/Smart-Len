@@ -76,7 +76,7 @@
         android:autoLink="web"
         android:background="@android:color/white"
         android:padding="10dp"
-        android:text="QR Code Result goes here"
+        android:text="Result goes here"
         android:textAlignment="center"
         android:textColor="@color/schoolNameColor"
         android:textSize="14sp"

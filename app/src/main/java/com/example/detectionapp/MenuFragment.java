@@ -8,10 +8,15 @@ import android.widget.LinearLayout;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.OptIn;
+import androidx.camera.core.ExperimentalGetImage;
 import androidx.fragment.app.Fragment;
+
+import com.google.android.material.bottomnavigation.BottomNavigationView;
 
 public class MenuFragment extends Fragment {
 
+    @OptIn(markerClass = ExperimentalGetImage.class)
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
@@ -34,5 +39,13 @@ public class MenuFragment extends Fragment {
                 .replace(R.id.frame_layout, fragment)
                 .addToBackStack(null)
                 .commit();
+
+        // Unselect the "Menu" item
+        BottomNavigationView bottomNav = requireActivity().findViewById(R.id.bottom_nav);
+        bottomNav.getMenu().setGroupCheckable(0, true, false); // disable exclusive selection
+        for (int i = 0; i < bottomNav.getMenu().size(); i++) {
+            bottomNav.getMenu().getItem(i).setChecked(false);
+        }
+        bottomNav.getMenu().setGroupCheckable(0, true, true); // re-enable exclusive selection
     }
 }

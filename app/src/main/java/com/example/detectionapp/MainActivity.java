@@ -12,14 +12,6 @@ import android.widget.EditText;
 import android.widget.ImageView;
 
 import androidx.appcompat.app.AppCompatActivity;
-import java.util.Properties;
-import java.io.IOException;
-import java.io.InputStream;
-
-import cn.easyar.Engine;
-
-
-
 
 public class MainActivity extends AppCompatActivity {
 
@@ -32,26 +24,8 @@ public class MainActivity extends AppCompatActivity {
         Animation zoomAnim = AnimationUtils.loadAnimation(this, R.anim.zoom_in_out);
         logo.startAnimation(zoomAnim);
         setupPasswordToggle();
-
-        // Initialize EasyAR with the license key
-        boolean initialized = Engine.initialize(this, getEasyARLicenseKey());
-        if (!initialized) {
-            throw new RuntimeException("Failed to initialize EasyAR. Check your license key.");
-        }
     }
     
-    private String getEasyARLicenseKey() {
-        try {
-            Properties properties = new Properties();
-            InputStream input = getAssets().open("local.properties");
-            properties.load(input);
-            return properties.getProperty("easyar.license.key");
-        } catch (IOException e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
-
     private void setupPasswordToggle() {
         EditText passwordEditText = findViewById(R.id.editTextPassword);
         ImageView toggleIcon = findViewById(R.id.passwordToggle);

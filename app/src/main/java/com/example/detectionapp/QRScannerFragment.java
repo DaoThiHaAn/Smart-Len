@@ -148,28 +148,39 @@ public class QRScannerFragment extends Fragment {
                         InputImage inputImage = InputImage.fromMediaImage(image.getImage(), image.getImageInfo().getRotationDegrees());
                         scanner.process(inputImage)
                                 .addOnSuccessListener(barcodes -> {
-                                    for (Barcode barcode : barcodes) {
-                                        String rawValue = barcode.getRawValue();
-                                        if (rawValue != null) {
-                                            // Stop scanning animation
-                                            View scanningContainer = getView().findViewById(R.id.scanningContainer);
-                                            scanningContainer.setVisibility(View.GONE);
-                                            if (scanAnimator != null && scanAnimator.isRunning()) {
-                                                scanAnimator.cancel();
-                                            }
+                                    if (barcodes.isEmpty()) {
+                                        // No barcodes detected, show scanning animation
+                                        View scanningContainer = getView().findViewById(R.id.scanningContainer);
+                                        scanningContainer.setVisibility(View.VISIBLE);
 
-                                            // Truncate long URLs for display
-                                            String displayText = rawValue.length() > 50 ? rawValue.substring(0, 47) + "..." : rawValue;
-                                            qrCodeResult.setText(displayText);
+                                        if (scanAnimator != null && !scanAnimator.isRunning()) {
+                                            scanAnimator.start();
+                                        }
 
-                                            // Make the TextView clickable if it's a URL
-                                            if (rawValue.startsWith("http://") || rawValue.startsWith("https://")) {
-                                                qrCodeResult.setOnClickListener(v -> {
-                                                    Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(rawValue));
-                                                    startActivity(browserIntent);
-                                                });
-                                            } else {
-                                                qrCodeResult.setOnClickListener(null); // Disable click if not a URL
+                                    } else {
+                                        for (Barcode barcode : barcodes) {
+                                            String rawValue = barcode.getRawValue();
+                                            if (rawValue != null) {
+                                                // Stop scanning animation
+                                                View scanningContainer = getView().findViewById(R.id.scanningContainer);
+                                                scanningContainer.setVisibility(View.GONE);
+                                                if (scanAnimator != null && scanAnimator.isRunning()) {
+                                                    scanAnimator.cancel();
+                                                }
+
+                                                // Truncate long URLs for display
+                                                String displayText = rawValue.length() > 50 ? rawValue.substring(0, 47) + "..." : rawValue;
+                                                qrCodeResult.setText(displayText);
+
+                                                // Make the TextView clickable if it's a URL
+                                                if (rawValue.startsWith("http://") || rawValue.startsWith("https://")) {
+                                                    qrCodeResult.setOnClickListener(v -> {
+                                                        Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(rawValue));
+                                                        startActivity(browserIntent);
+                                                    });
+                                                } else {
+                                                    qrCodeResult.setOnClickListener(null); // Disable click if not a URL
+                                                }
                                             }
                                         }
                                     }
