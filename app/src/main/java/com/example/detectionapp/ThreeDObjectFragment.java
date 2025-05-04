@@ -55,7 +55,7 @@ public class ThreeDObjectFragment extends Fragment {
         filePickerLauncher = registerForActivityResult(new ActivityResultContracts.GetContent(), uri -> {
             if (uri != null) {
                 String fileName = getFileNameFromUri(uri);
-                Log.d(TAG, "File selected: " + uri.toString());
+                Log.d(TAG, "File selected: " + uri);
                 selectedFileNameTextView.setText(fileName);
                 progressBar.setVisibility(View.VISIBLE); // Show progress
 
@@ -141,9 +141,6 @@ public class ThreeDObjectFragment extends Fragment {
     }
 
     private void openFilePicker() {
-        // You can try being more specific, but octet-stream is a safe fallback
-        // filePickerLauncher.launch("model/obj");
-        // filePickerLauncher.launch("model/*");
         filePickerLauncher.launch("*/*"); // Allow any file type initially
     }
 
