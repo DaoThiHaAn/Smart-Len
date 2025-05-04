@@ -1,11 +1,13 @@
 package com.example.detectionapp;
 
+import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.text.InputType;
 import android.view.View;
 import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.ImageView;
 
@@ -20,7 +22,6 @@ import cn.easyar.Engine;
 
 
 public class MainActivity extends AppCompatActivity {
-
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -57,24 +58,39 @@ public class MainActivity extends AppCompatActivity {
     
         // Set the initial icon based on the current InputType
         if (passwordEditText.getInputType() == (InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD)) {
-            toggleIcon.setImageResource(R.drawable.invisible); // Password is hidden
+            toggleIcon.setImageResource(R.drawable.visible); // Password is hidden
         } else {
-            toggleIcon.setImageResource(R.drawable.visible); // Password is visible
+            toggleIcon.setImageResource(R.drawable.invisible); // Password is visible
         }
+
+        // Show the keyboard when the password field gains focus
+        passwordEditText.setOnFocusChangeListener((v, hasFocus) -> {
+            if (hasFocus) {
+                showKeyboard(passwordEditText);
+            }
+        });
     
         toggleIcon.setOnClickListener(v -> {
             if (passwordEditText.getInputType() == (InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD)) {
                 // Show password
                 passwordEditText.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
-                toggleIcon.setImageResource(R.drawable.visible);
+                toggleIcon.setImageResource(R.drawable.invisible);
             } else {
                 // Hide password
                 passwordEditText.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-                toggleIcon.setImageResource(R.drawable.invisible);
+                toggleIcon.setImageResource(R.drawable.visible);
             }
             // Move the cursor to the end of the text
             passwordEditText.setSelection(passwordEditText.getText().length());
         });
+    }
+
+    private void showKeyboard(EditText editText) {
+        editText.requestFocus();
+        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (imm != null) {
+            imm.showSoftInput(editText, InputMethodManager.SHOW_IMPLICIT);
+        }
     }
 
     public void validateAccount(View v) {

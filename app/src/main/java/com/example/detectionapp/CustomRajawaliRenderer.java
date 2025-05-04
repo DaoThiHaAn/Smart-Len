@@ -44,7 +44,7 @@ public class CustomRajawaliRenderer extends Renderer {
         // Add some ambient light
         DirectionalLight ambientLight = new DirectionalLight(0.1, -0.5, -0.5);
         ambientLight.setColor(0.7f, 0.7f, 0.7f);
-        ambientLight.setPower(0.5f);
+        ambientLight.setPower(1f);
         getCurrentScene().addLight(ambientLight);
 
         // Set up the camera
@@ -89,20 +89,22 @@ public class CustomRajawaliRenderer extends Renderer {
             }
             Log.d(TAG, "Parsed object retrieved.");
 
-            newObject.setPosition(0, 0, 0);
-
+            // Center the object
             Vector3 min = newObject.getBoundingBox().getTransformedMin();
             Vector3 max = newObject.getBoundingBox().getTransformedMax();
+            Vector3 center = Vector3.addAndCreate(min, max).multiply(0.5); // Calculate center
+            newObject.setPosition(-center.x, -center.y, -center.z); // Offset to center the object
+
+            // Scale the object
             float width = (float) (max.x - min.x);
             float height = (float) (max.y - min.y);
             float depth = (float) (max.z - min.z);
-            float maxDim = Math.max(width, Math.max(height, depth));
+            float maxDim = Math.max(width, Math.max(height, depth)); // Get the largest dimension
 
-            float targetDim = 4.0f;
-            float scaleFactor = (maxDim > 0) ? targetDim / maxDim : 1.0f;
-
+            float targetDim = 4.0f; // Target dimension (e.g., fit within 4 units)
+            float scaleFactor = (maxDim > 0) ? targetDim / maxDim : 1.0f; // Avoid division by zero
             newObject.setScale(scaleFactor);
-            Log.d(TAG, "Object scale set to: " + scaleFactor);
+            Log.d(TAG, "Object scaled to fit within target dimension: " + targetDim);
 
             Object3D oldObject = this.object3D;
             objectToAdd = newObject;

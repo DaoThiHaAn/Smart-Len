@@ -16,6 +16,17 @@
         <item name="android:paddingBottom">5dp</item>
         <item name="android:drawableLeft">@drawable/ic_add</item>
         <item name="backgroundTint">@null</item> <!-- Remove Material3 default tint -->
+    </style>
 
+    <style name="CustomRemoveBtnStyle" parent="Widget.Material3.Button">
+        <item name="android:background">@drawable/btn_remove_selector</item>
+        <item name="android:textColor">#851818</item>
+        <item name="android:paddingStart">5dp</item>
+        <item name="android:paddingEnd">5dp</item>
+        <item name="android:paddingTop">0dp</item>
+        <item name="android:paddingBottom">0dp</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:minHeight">0dp</item>
+        <item name="backgroundTint">@null</item>
     </style>
 </resources>

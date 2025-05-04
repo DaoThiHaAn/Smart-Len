@@ -27,7 +27,6 @@ import java.util.concurrent.ExecutorService; // Import ExecutorService
 import java.util.concurrent.Executors; // Import Executors
 
 public class ThreeDObjectFragment extends Fragment {
-
     private static final String TAG = "3DObjectFragment"; // Tag for logging
 
     private SurfaceView rajawaliSurfaceView;
@@ -51,15 +50,13 @@ public class ThreeDObjectFragment extends Fragment {
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+
         // Initialize the file picker launcher
         filePickerLauncher = registerForActivityResult(new ActivityResultContracts.GetContent(), uri -> {
             if (uri != null) {
+                String fileName = getFileNameFromUri(uri);
                 Log.d(TAG, "File selected: " + uri.toString());
-                // Update UI immediately (optional)
-                String fileName = getFileNameFromUri(uri); // Helper method needed
                 selectedFileNameTextView.setText(fileName);
-                selectedFileNameTextView.setVisibility(View.VISIBLE);
-                removeButton.setVisibility(View.VISIBLE);
                 progressBar.setVisibility(View.VISIBLE); // Show progress
 
                 // Launch background loading
@@ -154,13 +151,17 @@ public class ThreeDObjectFragment extends Fragment {
         backgroundExecutor.execute(() -> {
             // Perform loading in the background thread
             final boolean success = renderer.loadObjInBackground(uri);
-
+    
             // Post result back to the main thread to update UI
             mainThreadHandler.post(() -> {
                 progressBar.setVisibility(View.GONE); // Hide progress
                 if (success) {
                     Toast.makeText(getContext(), "Model loaded successfully", Toast.LENGTH_SHORT).show();
-                    // UI updated via filePickerLauncher callback already for name/button
+    
+                    // Update UI: Hide Add button and show TextView + Remove button
+                    addButton.setVisibility(View.INVISIBLE);
+                    selectedFileNameTextView.setVisibility(View.VISIBLE);
+                    removeButton.setVisibility(View.VISIBLE);
                 } else {
                     Toast.makeText(getContext(), "Failed to load model", Toast.LENGTH_LONG).show();
                     removeCurrentObject(); // Clear UI if loading failed
@@ -173,12 +174,14 @@ public class ThreeDObjectFragment extends Fragment {
         // Request renderer to clear the object (will happen on render thread)
         renderer.objectNeedsAdding = true; // Set flag
         renderer.objectToAdd = null;      // Set object to add as null
-        rajawaliSurfaceView.requestRender();          // Trigger render to process removal
-
-        // Update UI
+        rajawaliSurfaceView.requestRender(); // Trigger render to process removal
+    
+        // Update UI: Show Add button and hide TextView + Remove button
         selectedFileNameTextView.setText("");
         selectedFileNameTextView.setVisibility(View.GONE);
         removeButton.setVisibility(View.GONE);
+        addButton.setVisibility(View.VISIBLE);
+    
         Log.d(TAG, "Object removal requested.");
     }
 
