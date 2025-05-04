@@ -53,4 +53,6 @@ dependencies {
     implementation ("com.google.android.flexbox:flexbox:3.0.0")
     implementation("com.google.android.material:material:1.11.0")
     implementation(files("libs/EasyAR.jar"))
+    implementation("org.rajawali3d:rajawali:1.1.970")
+    
 }

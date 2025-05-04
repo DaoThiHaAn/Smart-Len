@@ -1,196 +1,276 @@
 package com.example.detectionapp;
 
-import android.animation.ObjectAnimator;
-
+import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler; // Import Handler
+import android.os.Looper; // Import Looper
+import android.util.Log;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
-import android.widget.FrameLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
-import android.widget.Toast;
-import android.Manifest;
-import android.content.pm.PackageManager;
+import android.widget.Toast; // Import Toast
 
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.activity.result.ActivityResultLauncher; // Import ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts; // Import ActivityResultContracts
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.camera.core.CameraSelector;
-import androidx.camera.core.Preview;
-import androidx.camera.view.PreviewView;
-import androidx.camera.lifecycle.ProcessCameraProvider;
-import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 
-import com.google.common.util.concurrent.ListenableFuture;
+import org.rajawali3d.view.SurfaceView;
+
+import java.util.concurrent.ExecutorService; // Import ExecutorService
+import java.util.concurrent.Executors; // Import Executors
 
 public class ThreeDObjectFragment extends Fragment {
 
-    private ObjectAnimator scanAnimator;
-    private FrameLayout scanningContainer;
-    private View scanningLine;
-    private ProgressBar progressBar;
-    private TextView selectedFileName;
-    private Button removeButton;
+    private static final String TAG = "3DObjectFragment"; // Tag for logging
+
+    private SurfaceView rajawaliSurfaceView;
+    private CustomRajawaliRenderer renderer;
     private ScaleGestureDetector scaleGestureDetector;
+    private float previousX, previousY;
+    private ProgressBar progressBar;
+    private TextView selectedFileNameTextView; // Renamed for clarity
+    private Button removeButton;
+    private Button addButton;
+
+    // Executor for background tasks
+    private final ExecutorService backgroundExecutor = Executors.newSingleThreadExecutor();
+    // Handler for posting results back to the main thread
+    private final Handler mainThreadHandler = new Handler(Looper.getMainLooper());
+
+    // Activity Result Launcher for file picking
     private ActivityResultLauncher<String> filePickerLauncher;
-    private ActivityResultLauncher<String> requestPermissionLauncher;
+
+    @Override
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        // Initialize the file picker launcher
+        filePickerLauncher = registerForActivityResult(new ActivityResultContracts.GetContent(), uri -> {
+            if (uri != null) {
+                Log.d(TAG, "File selected: " + uri.toString());
+                // Update UI immediately (optional)
+                String fileName = getFileNameFromUri(uri); // Helper method needed
+                selectedFileNameTextView.setText(fileName);
+                selectedFileNameTextView.setVisibility(View.VISIBLE);
+                removeButton.setVisibility(View.VISIBLE);
+                progressBar.setVisibility(View.VISIBLE); // Show progress
+
+                // Launch background loading
+                loadModelInBackground(uri);
+            } else {
+                Log.d(TAG, "File selection cancelled.");
+            }
+        });
+    }
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_three_d_object, container, false);
 
-        // Initialize views
-        scanningContainer = view.findViewById(R.id.scanningContainer);
-        scanningLine = view.findViewById(R.id.scanningLine);
+        // Initialize Views
+        rajawaliSurfaceView = view.findViewById(R.id.rajawaliSurfaceView);
         progressBar = view.findViewById(R.id.progressBar);
-        selectedFileName = view.findViewById(R.id.selectedFileName);
+        selectedFileNameTextView = view.findViewById(R.id.selectedFileName);
         removeButton = view.findViewById(R.id.removeButton);
-        Button addButton = view.findViewById(R.id.addBtn);
+        addButton = view.findViewById(R.id.addBtn);
 
-        // Initialize the file picker launcher
-        filePickerLauncher = registerForActivityResult(new ActivityResultContracts.GetContent(), uri -> {
-            if (uri != null) {
-                String fileName = uri.getLastPathSegment(); // Extract file name
-                if (fileName != null) {
-                    stopScanningAnimation();
-                    selectedFileName.setText(fileName);
-                    selectedFileName.setVisibility(View.VISIBLE);
-                    removeButton.setVisibility(View.VISIBLE);
-                }
-            }
-        });
+        // --- Setup Rajawali ---
+        renderer = new CustomRajawaliRenderer(requireContext(), rajawaliSurfaceView); // Pass SurfaceView
+        rajawaliSurfaceView.setSurfaceRenderer(renderer);
 
-        // Initialize the permission launcher
-        requestPermissionLauncher = registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
-            if (isGranted) {
-                startCamera(view);
-            } else {
-                Toast.makeText(requireContext(), "Camera permission is required", Toast.LENGTH_SHORT).show();
-            }
-        });
+        // Important for transparency if your renderer background is transparent
+        rajawaliSurfaceView.setZOrderMediaOverlay(true);
+        rajawaliSurfaceView.getHolder().setFormat(android.graphics.PixelFormat.TRANSLUCENT);
 
-        // Show progress bar while starting the camera
-        progressBar.setVisibility(View.VISIBLE);
-
-        // Check for camera permissions
-        if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.CAMERA)
-                != PackageManager.PERMISSION_GRANTED) {
-            requestPermissionLauncher.launch(Manifest.permission.CAMERA);
-        } else {
-            startCamera(view);
-        }
-
-        // Initialize scanning animation
-        startScanningAnimation();
-
-        // Add button click listener
+        // --- Setup Listeners ---
         addButton.setOnClickListener(v -> openFilePicker());
+        removeButton.setOnClickListener(v -> removeCurrentObject());
 
-        // Remove button click listener
-        removeButton.setOnClickListener(v -> removeObject());
-
-        // Initialize touch gestures
-        setupTouchGestures(view);
+        // --- Setup Touch Handling ---
+        setupTouchListener();
+        scaleGestureDetector = new ScaleGestureDetector(requireContext(), new ScaleListener());
 
         return view;
     }
 
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == 101 && grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            startCamera(getView());
-        } else {
-            Toast.makeText(requireContext(), "Camera permission is required", Toast.LENGTH_SHORT).show();
-        }
-    }
+    private void setupTouchListener() {
+        rajawaliSurfaceView.setOnTouchListener((v, event) -> {
+            // Pass event to ScaleGestureDetector FIRST
+            scaleGestureDetector.onTouchEvent(event);
 
-    private void startCamera(View view) {
-        ListenableFuture<ProcessCameraProvider> cameraProviderFuture =
-                ProcessCameraProvider.getInstance(requireContext());
-
-        cameraProviderFuture.addListener(() -> {
-            try {
-                ProcessCameraProvider cameraProvider = cameraProviderFuture.get();
-
-                // Camera setup logic here (e.g., bind preview, analysis, etc.)
-                Preview preview = new Preview.Builder().build();
-                CameraSelector cameraSelector = new CameraSelector.Builder()
-                        .requireLensFacing(CameraSelector.LENS_FACING_BACK)
-                        .build();
-
-                PreviewView previewView = view.findViewById(R.id.previewView);
-                preview.setSurfaceProvider(previewView.getSurfaceProvider());
-
-                cameraProvider.bindToLifecycle(this, cameraSelector, preview);
-
-                // Hide progress bar after camera starts
-                progressBar.setVisibility(View.GONE);
-
-                // Start scanning animation after camera setup
-                startScanningAnimation();
-
-                Toast.makeText(requireContext(), "Camera started", Toast.LENGTH_SHORT).show();
-            } catch (Exception e) {
-                progressBar.setVisibility(View.GONE); // Hide progress bar on failure
-                Toast.makeText(requireContext(), "Failed to start camera", Toast.LENGTH_SHORT).show();
+            // Don't handle drag if scaling is in progress
+            if (scaleGestureDetector.isInProgress()) {
+                return true;
             }
-        }, ContextCompat.getMainExecutor(requireContext()));
-    }
 
-    private void startScanningAnimation() {
-        scanningContainer.setVisibility(View.VISIBLE);
-        scanningLine.setTranslationY(0f); // Reset line position
-        scanAnimator = ObjectAnimator.ofFloat(scanningLine, "translationY", 0f, scanningContainer.getHeight());
-        scanAnimator.setDuration(2000);
-        scanAnimator.setRepeatCount(ObjectAnimator.INFINITE);
-        scanAnimator.setRepeatMode(ObjectAnimator.REVERSE);
-        scanAnimator.start();
-    }
+            // Handle drag
+            switch (event.getActionMasked()) { // Use getActionMasked for multi-touch compatibility
+                case MotionEvent.ACTION_DOWN:
+                    Log.d(TAG, "Touch Down");
+                    previousX = event.getX();
+                    previousY = event.getY();
+                    break;
+                case MotionEvent.ACTION_MOVE:
+                    // Only rotate if one pointer is down (prevents rotate while pinching)
+                    if (event.getPointerCount() == 1) {
+                        float dx = event.getX() - previousX;
+                        float dy = event.getY() - previousY;
 
-    private void stopScanningAnimation() {
-        if (scanAnimator != null && scanAnimator.isRunning()) {
-            scanAnimator.cancel();
-        }
-        scanningContainer.setVisibility(View.GONE);
+                        // Send drag info to renderer
+                        renderer.handleDrag(dx, dy);
+
+                        // Update previous coordinates for next move event
+                        previousX = event.getX();
+                        previousY = event.getY();
+                    }
+                    break;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    Log.d(TAG, "Touch Up/Cancel");
+                    // No action needed here for simple rotation
+                    break;
+            }
+            // We handled the touch event
+            return true;
+        });
     }
 
     private void openFilePicker() {
-        filePickerLauncher.launch("application/octet-stream"); // Adjust MIME type for 3D object files
+        // You can try being more specific, but octet-stream is a safe fallback
+        // filePickerLauncher.launch("model/obj");
+        // filePickerLauncher.launch("model/*");
+        filePickerLauncher.launch("*/*"); // Allow any file type initially
     }
 
-    private void removeObject() {
-        selectedFileName.setText("");
-        selectedFileName.setVisibility(View.GONE);
-        removeButton.setVisibility(View.GONE);
-        startScanningAnimation();
-    }
+    private void loadModelInBackground(Uri uri) {
+        backgroundExecutor.execute(() -> {
+            // Perform loading in the background thread
+            final boolean success = renderer.loadObjInBackground(uri);
 
-    private void setupTouchGestures(View view) {
-        scaleGestureDetector = new ScaleGestureDetector(requireContext(), new ScaleGestureDetector.SimpleOnScaleGestureListener() {
-            @Override
-            public boolean onScale(ScaleGestureDetector detector) {
-                // Handle zoom gesture
-                float scaleFactor = detector.getScaleFactor();
-                // Apply scaling logic to the 3D object
-                return true;
-            }
-        });
-
-        // Add touch listener to the AR view
-        View arView = view.findViewById(R.id.previewView);
-        if (arView != null) {
-            arView.setOnTouchListener((v, event) -> {
-                scaleGestureDetector.onTouchEvent(event);
-                // Handle rotation and movement gestures here
-                return true;
+            // Post result back to the main thread to update UI
+            mainThreadHandler.post(() -> {
+                progressBar.setVisibility(View.GONE); // Hide progress
+                if (success) {
+                    Toast.makeText(getContext(), "Model loaded successfully", Toast.LENGTH_SHORT).show();
+                    // UI updated via filePickerLauncher callback already for name/button
+                } else {
+                    Toast.makeText(getContext(), "Failed to load model", Toast.LENGTH_LONG).show();
+                    removeCurrentObject(); // Clear UI if loading failed
+                }
             });
+        });
+    }
+
+    private void removeCurrentObject() {
+        // Request renderer to clear the object (will happen on render thread)
+        renderer.objectNeedsAdding = true; // Set flag
+        renderer.objectToAdd = null;      // Set object to add as null
+        rajawaliSurfaceView.requestRender();          // Trigger render to process removal
+
+        // Update UI
+        selectedFileNameTextView.setText("");
+        selectedFileNameTextView.setVisibility(View.GONE);
+        removeButton.setVisibility(View.GONE);
+        Log.d(TAG, "Object removal requested.");
+    }
+
+    // Helper to get filename (implementation depends on URI type)
+    private String getFileNameFromUri(Uri uri) {
+        String result = null;
+        if (uri.getScheme() != null && uri.getScheme().equals("content")) {
+            try (android.database.Cursor cursor = requireContext().getContentResolver().query(uri, null, null, null, null)) {
+                if (cursor != null && cursor.moveToFirst()) {
+                    int nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME);
+                    if (nameIndex >= 0) {
+                        result = cursor.getString(nameIndex);
+                    }
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error getting filename from content URI", e);
+            }
+        }
+        if (result == null) {
+            result = uri.getPath();
+            if (result != null) {
+                int cut = result.lastIndexOf('/');
+                if (cut != -1) {
+                    result = result.substring(cut + 1);
+                }
+            }
+        }
+        // Fallback if still null
+        return result != null ? result : "Unknown File";
+    }
+
+    // --- Scale Gesture Listener ---
+    private class ScaleListener extends ScaleGestureDetector.SimpleOnScaleGestureListener {
+        @Override
+        public boolean onScale(ScaleGestureDetector detector) {
+            // Pass scale factor to renderer
+            // detector.getScaleFactor() gives the relative scale change since the last event
+            renderer.handleScale(detector.getScaleFactor());
+            return true; // We handled the scale event
+        }
+    }
+
+    // --- Fragment Lifecycle ---
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (renderer != null) {
+            renderer.onResume(); // Resume Rajawali renderer
+        }
+        if (rajawaliSurfaceView != null) {
+            rajawaliSurfaceView.onResume(); // Resume SurfaceView
+        }
+
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        if (renderer != null) {
+            renderer.onPause(); // Pause Rajawali renderer
+        }
+        if (rajawaliSurfaceView != null) {
+            rajawaliSurfaceView.onPause(); // Pause SurfaceView
+        }
+
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        // Clean up renderer resources
+        if (renderer != null) {
+            renderer.cleanup(); // Custom cleanup method
+        }
+        // Shut down the executor
+        backgroundExecutor.shutdown();
+        Log.d(TAG, "onDestroyView: Executor shutdown requested.");
+        // Nullify views to prevent leaks
+        rajawaliSurfaceView = null;
+        renderer = null;
+        progressBar = null;
+        // ... nullify other views ...
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        // Final check for executor shutdown if not done in onDestroyView
+        if (!backgroundExecutor.isShutdown()) {
+            backgroundExecutor.shutdownNow(); // Force shutdown if needed
+            Log.w(TAG, "onDestroy: Executor forced shutdown.");
         }
     }
 }
