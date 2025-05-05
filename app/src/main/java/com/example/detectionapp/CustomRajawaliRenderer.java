@@ -16,6 +16,8 @@ import org.rajawali3d.view.SurfaceView;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.io.BufferedReader;
+import java.io.FileReader;
 
 public class CustomRajawaliRenderer extends Renderer {
 
@@ -43,9 +45,10 @@ public class CustomRajawaliRenderer extends Renderer {
 
         // Add some ambient light
         DirectionalLight ambientLight = new DirectionalLight(0.1, -0.5, -0.5);
-        ambientLight.setColor(0.7f, 0.7f, 0.7f);
-        ambientLight.setPower(1f);
+        ambientLight.setColor(1.0f, 1.0f, 1.0f); // white
+        ambientLight.setPower(1.5f); // increase power for more ambient effect
         getCurrentScene().addLight(ambientLight);
+
 
         // Set up the camera
         getCurrentCamera().setPosition(0, 2, 10);
@@ -55,13 +58,17 @@ public class CustomRajawaliRenderer extends Renderer {
 
     public boolean loadObjInBackground(Uri uri) {
         Log.d(TAG, "Starting OBJ load in background for URI: " + uri);
-        File tempFile = null;
-        try {
-            tempFile = File.createTempFile("temp_model_", ".obj", getContext().getCacheDir());
-            Log.d(TAG, "Temporary file created: " + tempFile.getAbsolutePath());
+        File tempObjFile = null;
+        File tempMtlFile = null;
 
+        try {
+            // Step 1: Create a temporary .obj file
+            tempObjFile = File.createTempFile("temp_model_", ".obj", getContext().getCacheDir());
+            Log.d(TAG, "Temporary OBJ file created: " + tempObjFile.getAbsolutePath());
+
+            // Copy the .obj file content to the temporary file
             try (InputStream inputStream = getContext().getContentResolver().openInputStream(uri);
-                 FileOutputStream outputStream = new FileOutputStream(tempFile)) {
+                 FileOutputStream outputStream = new FileOutputStream(tempObjFile)) {
 
                 if (inputStream == null) {
                     Log.e(TAG, "Could not open InputStream for URI: " + uri);
@@ -74,10 +81,51 @@ public class CustomRajawaliRenderer extends Renderer {
                     outputStream.write(buffer, 0, length);
                 }
                 outputStream.flush();
-                Log.d(TAG, "Copied InputStream to temporary file.");
+                Log.d(TAG, "Copied OBJ InputStream to temporary file.");
             }
 
-            LoaderOBJ loaderOBJ = new LoaderOBJ(this, tempFile);
+            // Step 2: Parse the .obj file to find the mtllib reference
+            String mtlFileName = null;
+            try (BufferedReader reader = new BufferedReader(new FileReader(tempObjFile))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (line.trim().toLowerCase().startsWith("mtllib")) {
+                        mtlFileName = line.trim().substring(7).trim(); // Extract the filename after "mtllib"
+                        Log.d(TAG, "Found mtllib reference: " + mtlFileName);
+                        break;
+                    }
+                }
+            }
+
+            if (mtlFileName == null) {
+                Log.w(TAG, "No mtllib reference found in OBJ file.");
+            } else {
+                // Step 3: Copy the .mtl file to the cache directory and rename it
+                Uri mtlUri = Uri.parse(uri.toString().replace(".obj", ".mtl")); // Assuming .mtl is in the same location
+                tempMtlFile = new File(tempObjFile.getParent(), mtlFileName.replace(".mtl", "_mtl"));
+                Log.d(TAG, "Temporary MTL file path: " + tempMtlFile.getAbsolutePath());
+
+                try (InputStream mtlInputStream = getContext().getContentResolver().openInputStream(mtlUri);
+                     FileOutputStream mtlOutputStream = new FileOutputStream(tempMtlFile)) {
+
+                    if (mtlInputStream == null) {
+                        Log.e(TAG, "Could not open InputStream for MTL URI: " + mtlUri);
+                    } else {
+                        byte[] buffer = new byte[4096];
+                        int length;
+                        while ((length = mtlInputStream.read(buffer)) > 0) {
+                            mtlOutputStream.write(buffer, 0, length);
+                        }
+                        mtlOutputStream.flush();
+                        Log.d(TAG, "Copied and renamed MTL file to temporary directory.");
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Failed to copy and rename MTL file", e);
+                }
+            }
+
+            // Step 4: Load the .obj file using LoaderOBJ
+            LoaderOBJ loaderOBJ = new LoaderOBJ(this, tempObjFile);
             Log.d(TAG, "Parsing OBJ file...");
             loaderOBJ.parse();
             Log.d(TAG, "Parsing complete.");
@@ -89,20 +137,18 @@ public class CustomRajawaliRenderer extends Renderer {
             }
             Log.d(TAG, "Parsed object retrieved.");
 
-            // Center the object
+            // Center and scale the object
             Vector3 min = newObject.getBoundingBox().getTransformedMin();
             Vector3 max = newObject.getBoundingBox().getTransformedMax();
-            Vector3 center = Vector3.addAndCreate(min, max).multiply(0.5); // Calculate center
-            newObject.setPosition(-center.x, -center.y, -center.z); // Offset to center the object
+            Vector3 center = Vector3.addAndCreate(min, max).multiply(0.5);
+            newObject.setPosition(-center.x, -center.y, -center.z);
 
-            // Scale the object
             float width = (float) (max.x - min.x);
             float height = (float) (max.y - min.y);
             float depth = (float) (max.z - min.z);
-            float maxDim = Math.max(width, Math.max(height, depth)); // Get the largest dimension
-
-            float targetDim = 4.0f; // Target dimension (e.g., fit within 4 units)
-            float scaleFactor = (maxDim > 0) ? targetDim / maxDim : 1.0f; // Avoid division by zero
+            float maxDim = Math.max(width, Math.max(height, depth));
+            float targetDim = 4.0f;
+            float scaleFactor = (maxDim > 0) ? targetDim / maxDim : 1.0f;
             newObject.setScale(scaleFactor);
             Log.d(TAG, "Object scaled to fit within target dimension: " + targetDim);
 
@@ -110,7 +156,7 @@ public class CustomRajawaliRenderer extends Renderer {
             objectToAdd = newObject;
             objectNeedsAdding = true;
 
-            // Use the SurfaceView to request a render
+            // Request a render
             surfaceView.requestRender();
 
             if (oldObject != null) {
@@ -128,11 +174,19 @@ public class CustomRajawaliRenderer extends Renderer {
             e.printStackTrace();
             return false;
         } finally {
-            if (tempFile != null && tempFile.exists()) {
-                if (tempFile.delete()) {
-                    Log.d(TAG, "Temporary file deleted.");
+            // Clean up temporary files
+            if (tempObjFile != null && tempObjFile.exists()) {
+                if (tempObjFile.delete()) {
+                    Log.d(TAG, "Temporary OBJ file deleted.");
                 } else {
-                    Log.w(TAG, "Failed to delete temporary file: " + tempFile.getAbsolutePath());
+                    Log.w(TAG, "Failed to delete temporary OBJ file: " + tempObjFile.getAbsolutePath());
+                }
+            }
+            if (tempMtlFile != null && tempMtlFile.exists()) {
+                if (tempMtlFile.delete()) {
+                    Log.d(TAG, "Temporary MTL file deleted.");
+                } else {
+                    Log.w(TAG, "Failed to delete temporary MTL file: " + tempMtlFile.getAbsolutePath());
                 }
             }
         }
